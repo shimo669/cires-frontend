@@ -1,0 +1,11 @@
+@import "tailwindcss";
+
+/* If the above @import doesn't work for your version, use these three: */
+/* @tailwind base; */
+/* @tailwind components; */
+/* @tailwind utilities; */
+
+body {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+}

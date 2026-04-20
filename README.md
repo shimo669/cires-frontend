@@ -20,6 +20,7 @@ Core workflows are implemented across four phases:
 2. Geography + report submission engine
 3. Citizen/Leader dashboards + ticket actions
 4. Audit history + admin tools
+5. Testing, debugging, and performance hardening
 
 ## Features
 
@@ -46,7 +47,7 @@ Core workflows are implemented across four phases:
 - Leader dashboard:
   - Queue selector by escalation level
   - Resolve/escalate actions
-  - Auto-refresh after action
+  - Auto-refresh after action and interval polling
 
 ### Audit + Admin
 
@@ -80,6 +81,18 @@ npm run dev
 
 ```powershell
 npm run build
+```
+
+### 3.1) Run test suite
+
+```powershell
+npm run test:run
+```
+
+### 3.2) Run coverage report
+
+```powershell
+npm run test:coverage
 ```
 
 ### 4) Preview production build
@@ -120,6 +133,7 @@ npm run preview
 - `GET /reports/level/{level}`
 - `PUT /reports/{id}/resolve`
 - `PUT /reports/{id}/escalate`
+- `PUT /reports/{id}/confirm`
 
 ### Interactions
 

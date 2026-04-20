@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Report as ReportDTO } from '../../types/report';
 import { escalateReport, getMyJurisdictionReports, resolveReport } from '../../api/reportApi';
 import Badge from '../../components/common/Badge';
@@ -47,8 +47,14 @@ const LeaderDashboard = () => {
   const [error, setError] = useState('');
   const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
   const [infoMessage, setInfoMessage] = useState('');
+  const isFetchingRef = useRef(false);
 
   const fetchReports = async () => {
+    if (isFetchingRef.current) {
+      return;
+    }
+
+    isFetchingRef.current = true;
     setLoading(true);
     setError('');
 
@@ -59,6 +65,7 @@ const LeaderDashboard = () => {
       setError(extractAxiosErrorMessage(caughtError, 'Failed to load reports in your jurisdiction. Please try again.'));
       setReports([]);
     } finally {
+      isFetchingRef.current = false;
       setLoading(false);
     }
   };

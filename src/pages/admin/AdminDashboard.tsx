@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import {
   AlertTriangle,
@@ -196,11 +196,18 @@ const AdminDashboard = () => {
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [reportSearchInput, setReportSearchInput] = useState('');
   const [reportSearchQuery, setReportSearchQuery] = useState('');
+  const isFetchingUsersRef = useRef(false);
+  const isFetchingReportsRef = useRef(false);
 
   useEffect(() => {
     let isMounted = true;
 
     const loadUsers = async () => {
+      if (isFetchingUsersRef.current) {
+        return;
+      }
+
+      isFetchingUsersRef.current = true;
       setUsersLoading(true);
       setUsersError('');
 
@@ -215,6 +222,7 @@ const AdminDashboard = () => {
           setUsersError('Failed to load users. Please try again.');
         }
       } finally {
+        isFetchingUsersRef.current = false;
         if (isMounted) {
           setUsersLoading(false);
         }
@@ -237,6 +245,11 @@ const AdminDashboard = () => {
     let isMounted = true;
 
     const loadReports = async () => {
+      if (isFetchingReportsRef.current) {
+        return;
+      }
+
+      isFetchingReportsRef.current = true;
       setReportsLoading(true);
       setReportsError('');
 
@@ -256,6 +269,7 @@ const AdminDashboard = () => {
           setReportsError(message ?? 'Failed to load reports. Please try again.');
         }
       } finally {
+        isFetchingReportsRef.current = false;
         if (isMounted) {
           setReportsLoading(false);
         }

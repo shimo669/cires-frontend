@@ -10,10 +10,11 @@ const badgeStyles: Record<string, string> = {
   OVERDUE: 'border-red-200 bg-red-50 text-red-700',
   CRITICAL: 'border-red-200 bg-red-50 text-red-700',
   PENDING: 'border-yellow-200 bg-yellow-50 text-yellow-800',
-  PENDING_CONFIRMATION: 'border-purple-200 bg-purple-50 text-purple-700',
+  PENDING_CONFIRMATION: 'border-amber-200 bg-amber-50 text-amber-700',
+  PENDING_REPORTER_CONFIRMATION: 'border-amber-200 bg-amber-50 text-amber-700',
   IN_PROGRESS: 'border-blue-200 bg-blue-50 text-blue-700',
   RESOLVED: 'border-green-200 bg-green-50 text-green-700',
-  REOPENED: 'border-orange-200 bg-orange-50 text-orange-700',
+  REOPENED: 'border-red-200 bg-red-50 text-red-700',
   SOLVED: 'border-green-200 bg-green-50 text-green-700',
   DEFAULT: 'border-slate-200 bg-slate-100 text-slate-700',
 };
@@ -21,6 +22,7 @@ const badgeStyles: Record<string, string> = {
 const badgeLabels: Record<string, string> = {
   IN_PROGRESS: 'IN PROGRESS',
   PENDING_CONFIRMATION: 'PENDING CONFIRMATION',
+  PENDING_REPORTER_CONFIRMATION: 'PENDING CONFIRMATION',
 };
 
 const Badge: React.FC<BadgeProps> = ({ status }) => {

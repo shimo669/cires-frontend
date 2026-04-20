@@ -3,9 +3,16 @@ export type ReportStatus =
   | 'PENDING'
   | 'IN_PROGRESS'
   | 'PENDING_CONFIRMATION'
+  | 'PENDING_REPORTER_CONFIRMATION'
   | 'RESOLVED'
   | 'ESCALATED'
   | 'REOPENED';
+
+export interface ReporterConfirmationRequest {
+  approved: boolean;
+  rating?: number;
+  comment?: string;
+}
 
 export interface CreateReportRequest {
   title: string;
@@ -30,5 +37,10 @@ export interface Report {
   created_at: string;
   reporter_username?: string;
   feedback_rating?: number;
+  reporterConfirmationRequired?: boolean;
+  reporterApproved?: boolean | null;
+  serviceRating?: number | null;
+  serviceComment?: string | null;
+  reporterConfirmedAt?: string | null;
 }
 

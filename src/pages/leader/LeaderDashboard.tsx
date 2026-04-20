@@ -36,6 +36,10 @@ const getTimeRemaining = (deadline: string) => {
   return { text: `${hours}h ${minutes}m left`, isOverdue: false };
 };
 
+const isPendingReporterConfirmation = (report: ReportDTO) => {
+  return report.status === 'PENDING_REPORTER_CONFIRMATION' || report.status === 'PENDING_CONFIRMATION';
+};
+
 const LeaderDashboard = () => {
   const { user } = useAuth();
   const [reports, setReports] = useState<ReportDTO[]>([]);
@@ -71,7 +75,7 @@ const LeaderDashboard = () => {
   }, [user?.levelType]);
 
   const stats = useMemo(() => {
-    const pendingConfirmation = reports.filter((item) => item.status === 'PENDING_CONFIRMATION').length;
+    const pendingConfirmation = reports.filter((item) => isPendingReporterConfirmation(item)).length;
     const open = reports.filter((item) => item.status === 'PENDING' || item.status === 'IN_PROGRESS').length;
     const overdue = reports.filter((item) => getTimeRemaining(item.sla_deadline).isOverdue && item.status !== 'RESOLVED').length;
 
@@ -90,7 +94,7 @@ const LeaderDashboard = () => {
 
     try {
       await resolveReport(id);
-      setInfoMessage('Issue marked as resolved and sent to citizen for confirmation.');
+      setInfoMessage('Report marked as solved. Waiting for reporter confirmation.');
       await fetchReports();
     } catch (caughtError) {
       setError(extractAxiosErrorMessage(caughtError, 'Failed to resolve report. Please try again.'));
@@ -188,7 +192,7 @@ const LeaderDashboard = () => {
                 <tbody className="divide-y divide-slate-100">
                   {reports.map((report) => {
                     const isResolved = report.status === 'RESOLVED';
-                    const awaitingCitizen = report.status === 'PENDING_CONFIRMATION';
+                    const awaitingCitizen = isPendingReporterConfirmation(report);
                     const isRowLoading = actionLoadingId === report.report_id;
                     const timer = getTimeRemaining(report.sla_deadline);
 
@@ -206,7 +210,11 @@ const LeaderDashboard = () => {
                         </td>
                         <td className="px-5 py-4">
                           {isResolved || awaitingCitizen ? (
-                            <span className="text-sm text-slate-500">No actions</span>
+                            awaitingCitizen ? (
+                              <span className="text-sm font-semibold text-amber-700">Waiting for reporter confirmation</span>
+                            ) : (
+                              <span className="text-sm text-slate-500">Finalized</span>
+                            )
                           ) : (
                             <div className="flex gap-2">
                               <button
@@ -217,7 +225,7 @@ const LeaderDashboard = () => {
                                 disabled={isRowLoading}
                                 className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
                               >
-                                Resolve
+                                Mark as Solved
                               </button>
                               <button
                                 type="button"

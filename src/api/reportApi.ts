@@ -1,4 +1,4 @@
-import type { CreateReportRequest, Report as ReportDTO } from '../types/report';
+import type { CreateReportRequest, Report as ReportDTO, ReporterConfirmationRequest } from '../types/report';
 import api from './axios';
 import { normalizeReportLevel, unwrapApiData } from './responseUtils';
 
@@ -10,6 +10,7 @@ const normalizeStatus = (status: unknown): ReportDTO['status'] => {
     value === 'PENDING' ||
     value === 'IN_PROGRESS' ||
     value === 'PENDING_CONFIRMATION' ||
+    value === 'PENDING_REPORTER_CONFIRMATION' ||
     value === 'RESOLVED' ||
     value === 'ESCALATED' ||
     value === 'REOPENED'
@@ -41,13 +42,18 @@ const normalizeReport = (raw: unknown): ReportDTO => {
     (report.slaDeadline as string | undefined) ??
     '';
   const createdAt = (report.created_at as string | undefined) ?? (report.createdAt as string | undefined) ?? new Date().toISOString();
+  const normalizedStatus = normalizeStatus(report.status);
+  const reporterConfirmationRequired =
+    (report.reporterConfirmationRequired as boolean | undefined) ??
+    (report.reporter_confirmation_required as boolean | undefined) ??
+    (normalizedStatus === 'PENDING_REPORTER_CONFIRMATION' || normalizedStatus === 'PENDING_CONFIRMATION');
 
   return {
     report_id: id,
     id,
     title: String(report.title ?? 'Untitled issue'),
     description: String(report.description ?? ''),
-    status: normalizeStatus(report.status),
+    status: normalizedStatus,
     categoryId: Number(report.categoryId ?? report.category_id ?? 0) || undefined,
     villageId: Number(report.villageId ?? report.village_id ?? report.incidentLocationId ?? 0) || undefined,
     category_name: category,
@@ -58,6 +64,21 @@ const normalizeReport = (raw: unknown): ReportDTO => {
     created_at: createdAt,
     reporter_username: (report.reporter_username as string | undefined) ?? (report.reporterUsername as string | undefined),
     feedback_rating: Number(report.feedback_rating ?? report.feedbackRating ?? 0) || undefined,
+    reporterConfirmationRequired,
+    reporterApproved:
+      (report.reporterApproved as boolean | null | undefined) ??
+      (report.reporter_approved as boolean | null | undefined) ??
+      null,
+    serviceRating: Number(report.serviceRating ?? report.service_rating ?? report.feedbackRating ?? 0) || null,
+    serviceComment:
+      (report.serviceComment as string | null | undefined) ??
+      (report.service_comment as string | null | undefined) ??
+      (report.feedbackComment as string | null | undefined) ??
+      null,
+    reporterConfirmedAt:
+      (report.reporterConfirmedAt as string | null | undefined) ??
+      (report.reporter_confirmed_at as string | null | undefined) ??
+      null,
   };
 };
 
@@ -125,13 +146,12 @@ export const escalateReport = async (id: number) => {
   return response.data;
 };
 
-export const confirmReport = async (id: number) => {
-  const response = await api.put(`/reports/${id}/confirm`);
+export const confirmReport = async (id: number, payload: ReporterConfirmationRequest) => {
+  const response = await api.put(`/reports/${id}/confirm`, payload);
   return response.data;
 };
 
 export const denyReport = async (id: number) => {
-  const response = await api.put(`/reports/${id}/deny`);
-  return response.data;
+  return confirmReport(id, { approved: false });
 };
 

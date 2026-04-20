@@ -139,8 +139,45 @@ const isResolvedOnTime = (report: ReportDTO) => {
   return report.status === 'RESOLVED' && !isOverdue(report);
 };
 
+const isPendingReporterConfirmation = (report: ReportDTO) => {
+  return report.status === 'PENDING_REPORTER_CONFIRMATION' || report.status === 'PENDING_CONFIRMATION';
+};
+
+const getReporterDecisionLabel = (report: ReportDTO) => {
+  if (report.reporterApproved === true || report.status === 'RESOLVED') {
+    return 'Approved';
+  }
+
+  if (report.reporterApproved === false || report.status === 'REOPENED') {
+    return 'Rejected';
+  }
+
+  if (report.reporterConfirmationRequired || isPendingReporterConfirmation(report)) {
+    return 'Pending';
+  }
+
+  return 'N/A';
+};
+
+const getReporterDecisionStyle = (label: string) => {
+  if (label === 'Approved') {
+    return 'border-green-200 bg-green-50 text-green-700';
+  }
+
+  if (label === 'Rejected') {
+    return 'border-red-200 bg-red-50 text-red-700';
+  }
+
+  if (label === 'Pending') {
+    return 'border-amber-200 bg-amber-50 text-amber-700';
+  }
+
+  return 'border-slate-200 bg-slate-100 text-slate-700';
+};
+
 const AdminDashboard = () => {
   const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'reports' | 'critical'>('overview');
 
   const [users, setUsers] = useState<UserResponseDTO[]>([]);
   const [reports, setReports] = useState<ReportDTO[]>([]);
@@ -273,7 +310,7 @@ const AdminDashboard = () => {
   const reportStats = useMemo(() => {
     const solved = reports.filter((report) => report.status === 'RESOLVED').length;
     const inProgress = reports.filter((report) => report.status === 'IN_PROGRESS').length;
-    const pending = reports.filter((report) => report.status === 'PENDING' || report.status === 'ESCALATED').length;
+    const pending = reports.filter((report) => report.status === 'PENDING' || report.status === 'ESCALATED' || isPendingReporterConfirmation(report)).length;
     const overdue = reports.filter(isOverdue).length;
 
     return {
@@ -317,7 +354,11 @@ const AdminDashboard = () => {
     }
 
     return reports.filter((report) => {
-      return report.report_id.toString().includes(query) || report.title.toLowerCase().includes(query);
+      return (
+        report.report_id.toString().includes(query) ||
+        report.title.toLowerCase().includes(query) ||
+        (report.serviceComment ?? '').toLowerCase().includes(query)
+      );
     });
   }, [reportSearchQuery, reports]);
 
@@ -422,6 +463,49 @@ const AdminDashboard = () => {
             </p>
           </section>
 
+          <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+              <button
+                type="button"
+                onClick={() => setActiveTab('overview')}
+                className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                  activeTab === 'overview' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                Overview
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('users')}
+                className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                  activeTab === 'users' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                Users
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('reports')}
+                className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                  activeTab === 'reports' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                Reports
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('critical')}
+                className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                  activeTab === 'critical' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                Critical
+              </button>
+            </div>
+          </section>
+
+          {activeTab === 'overview' && (
+          <>
           <section className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
             {[
               { label: 'Total Users', value: userStats.totalUsers, icon: Users, accent: 'blue' },
@@ -537,7 +621,10 @@ const AdminDashboard = () => {
               </div>
             </div>
           </section>
+          </>
+          )}
 
+          {activeTab === 'users' && (
           <section className="mb-8 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
             <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div>
@@ -664,7 +751,9 @@ const AdminDashboard = () => {
               )}
             </div>
           </section>
+          )}
 
+          {activeTab === 'reports' && (
           <section className="mb-8 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
             <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div>
@@ -709,29 +798,49 @@ const AdminDashboard = () => {
                       <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Location</th>
                       <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Deadline</th>
                       <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Status</th>
+                      <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Confirmation Required</th>
+                      <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Reporter Decision</th>
+                      <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Rating</th>
+                      <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Comment</th>
+                      <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Confirmed At</th>
                       <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Level</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 bg-white">
-                    {searchedReports.map((report) => (
-                      <tr key={report.report_id} className="hover:bg-slate-50">
-                        <td className="px-5 py-4 text-sm text-slate-700">#{report.report_id}</td>
-                        <td className="px-5 py-4 text-sm font-medium text-slate-900">{report.title}</td>
-                        <td className="px-5 py-4 text-sm text-slate-700">{report.category_name || 'N/A'}</td>
-                        <td className="px-5 py-4 text-sm text-slate-700">{report.incident_village || 'N/A'}</td>
-                        <td className="px-5 py-4 text-sm text-slate-700">{formatDateTime(report.sla_deadline)}</td>
-                        <td className="px-5 py-4">
-                          <Badge status={getSafeStatus(report.status)} />
-                        </td>
-                        <td className="px-5 py-4 text-sm text-slate-700">{report.current_escalation_level || 'N/A'}</td>
-                      </tr>
-                    ))}
+                    {searchedReports.map((report) => {
+                      const reporterDecision = getReporterDecisionLabel(report);
+
+                      return (
+                        <tr key={report.report_id} className="hover:bg-slate-50">
+                          <td className="px-5 py-4 text-sm text-slate-700">#{report.report_id}</td>
+                          <td className="px-5 py-4 text-sm font-medium text-slate-900">{report.title}</td>
+                          <td className="px-5 py-4 text-sm text-slate-700">{report.category_name || 'N/A'}</td>
+                          <td className="px-5 py-4 text-sm text-slate-700">{report.incident_village || 'N/A'}</td>
+                          <td className="px-5 py-4 text-sm text-slate-700">{formatDateTime(report.sla_deadline)}</td>
+                          <td className="px-5 py-4">
+                            <Badge status={getSafeStatus(report.status)} />
+                          </td>
+                          <td className="px-5 py-4 text-sm text-slate-700">{report.reporterConfirmationRequired ? 'Yes' : 'No'}</td>
+                          <td className="px-5 py-4">
+                            <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${getReporterDecisionStyle(reporterDecision)}`}>
+                              {reporterDecision}
+                            </span>
+                          </td>
+                          <td className="px-5 py-4 text-sm text-slate-700">{report.serviceRating ?? 'N/A'}</td>
+                          <td className="px-5 py-4 text-sm text-slate-700">{report.serviceComment ?? 'N/A'}</td>
+                          <td className="px-5 py-4 text-sm text-slate-700">{formatDateTime(report.reporterConfirmedAt ?? undefined)}</td>
+                          <td className="px-5 py-4 text-sm text-slate-700">{report.current_escalation_level || 'N/A'}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               )}
             </div>
           </section>
+          )}
 
+          {activeTab === 'critical' && (
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
             <div className="mb-4 flex items-center gap-2 text-slate-900">
               <ShieldAlert className="h-5 w-5 text-red-600" />
@@ -776,6 +885,7 @@ const AdminDashboard = () => {
               )}
             </div>
           </section>
+          )}
 
           {reportsLoading || usersLoading ? (
             <div className="mt-6 flex items-center justify-center gap-2 text-sm text-slate-500">

@@ -30,15 +30,15 @@ import Badge from '../../components/common/Badge';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import { getAllUsers, updateUserRole } from '../../api/adminApi';
-import { getReportsByLevel } from '../../api/reportApi';
+import { getAdminReports } from '../../api/reportApi';
 import type { UserResponseDTO } from '../../types/admin';
 import type { Report as ReportDTO } from '../../types/report';
 
-const REPORT_LEVELS = ['AT_VILLAGE', 'AT_CELL', 'AT_SECTOR', 'AT_DISTRICT', 'AT_PROVINCE'] as const;
-const ROLE_OPTIONS = ['ROLE_CITIZEN', 'ROLE_LEADER', 'ROLE_ADMIN'] as const;
+const ROLE_OPTIONS = ['CITIZEN', 'LEADER', 'ADMIN'] as const;
+const LEVEL_OPTIONS = ['CITIZEN', 'VILLAGE_LEADER', 'CELL_LEADER', 'SECTOR_LEADER', 'DISTRICT_MAYOR', 'PROVINCE_GOVERNOR', 'NATIONAL_ADMIN'] as const;
 
-type ReportLevel = (typeof REPORT_LEVELS)[number];
 type RoleOption = (typeof ROLE_OPTIONS)[number];
+type LevelOption = (typeof LEVEL_OPTIONS)[number];
 
 interface DeadlineBarShapeProps {
   x?: number;
@@ -79,15 +79,52 @@ const formatTrendLabel = (dateKey: string) => {
 const getDisplayName = (user: UserResponseDTO) => user.fullName?.trim() || user.username;
 
 const getUserAddress = (user: UserResponseDTO) => {
-  if (user.fullAddress?.trim()) {
-    return user.fullAddress;
+  if (user.fullRwandanAddress?.trim()) {
+    return user.fullRwandanAddress;
   }
 
-  const parts = [user.districtName, user.sectorName, user.cellName, user.villageName].filter(Boolean);
-  return parts.length > 0 ? parts.join(', ') : 'N/A';
+  return user.locationName?.trim() || 'N/A';
 };
 
 const getSafeStatus = (status?: string) => (status ?? 'PENDING').toUpperCase();
+
+const toRoleOption = (role?: string): RoleOption => {
+  const normalized = (role ?? 'CITIZEN').replace(/^ROLE_/, '').toUpperCase();
+  if (normalized === 'LEADER') {
+    return 'LEADER';
+  }
+
+  if (normalized === 'ADMIN') {
+    return 'ADMIN';
+  }
+
+  return 'CITIZEN';
+};
+
+const toLevelOption = (levelType?: string): LevelOption | '' => {
+  const normalized = (levelType ?? '').toUpperCase();
+
+  if (normalized === 'AT_VILLAGE') {
+    return 'VILLAGE_LEADER';
+  }
+  if (normalized === 'AT_CELL') {
+    return 'CELL_LEADER';
+  }
+  if (normalized === 'AT_SECTOR') {
+    return 'SECTOR_LEADER';
+  }
+  if (normalized === 'AT_DISTRICT') {
+    return 'DISTRICT_MAYOR';
+  }
+  if (normalized === 'AT_PROVINCE') {
+    return 'PROVINCE_GOVERNOR';
+  }
+  if (normalized === 'NATIONAL') {
+    return 'NATIONAL_ADMIN';
+  }
+
+  return LEVEL_OPTIONS.includes(normalized as LevelOption) ? (normalized as LevelOption) : '';
+};
 
 const isOverdue = (report: ReportDTO) => {
   const deadline = new Date(report.sla_deadline);
@@ -111,6 +148,8 @@ const AdminDashboard = () => {
   const [usersLoading, setUsersLoading] = useState(true);
   const [reportsLoading, setReportsLoading] = useState(true);
   const [roleUpdatingId, setRoleUpdatingId] = useState<number | null>(null);
+  const [pendingRoleByUserId, setPendingRoleByUserId] = useState<Record<number, RoleOption>>({});
+  const [pendingLevelByUserId, setPendingLevelByUserId] = useState<Record<number, LevelOption | ''>>({});
 
   const [usersError, setUsersError] = useState('');
   const [reportsError, setReportsError] = useState('');
@@ -147,8 +186,13 @@ const AdminDashboard = () => {
 
     void loadUsers();
 
+    const intervalId = window.setInterval(() => {
+      void loadUsers();
+    }, 30000);
+
     return () => {
       isMounted = false;
+      window.clearInterval(intervalId);
     };
   }, []);
 
@@ -160,39 +204,19 @@ const AdminDashboard = () => {
       setReportsError('');
 
       try {
-        const settled = await Promise.allSettled(
-          REPORT_LEVELS.map((level: ReportLevel) => getReportsByLevel(level)),
-        );
-
-        const deduped = new Map<number, ReportDTO>();
-        let rejectedCount = 0;
-
-        settled.forEach((result) => {
-          if (result.status === 'fulfilled') {
-            result.value.forEach((report) => {
-              deduped.set(report.report_id, report);
-            });
-          } else {
-            rejectedCount += 1;
-          }
-        });
-
-        const mergedReports = Array.from(deduped.values()).sort(
+        const allReports = await getAdminReports();
+        const mergedReports = allReports.sort(
           (left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
         );
 
         if (isMounted) {
           setReports(mergedReports);
-          if (rejectedCount > 0 && mergedReports.length > 0) {
-            setReportsError('Some queues could not be loaded. Showing available reports.');
-          } else if (rejectedCount > 0) {
-            setReportsError('Failed to load reports. Please try again.');
-          }
         }
-      } catch {
+      } catch (caughtError) {
+        const message = (caughtError as { response?: { data?: { message?: string } } })?.response?.data?.message;
         if (isMounted) {
           setReports([]);
-          setReportsError('Failed to load reports. Please try again.');
+          setReportsError(message ?? 'Failed to load reports. Please try again.');
         }
       } finally {
         if (isMounted) {
@@ -203,17 +227,46 @@ const AdminDashboard = () => {
 
     void loadReports();
 
+    const intervalId = window.setInterval(() => {
+      void loadReports();
+    }, 30000);
+
     return () => {
       isMounted = false;
+      window.clearInterval(intervalId);
     };
   }, []);
+
+  useEffect(() => {
+    setPendingRoleByUserId((previous) => {
+      const next = { ...previous };
+      users.forEach((item) => {
+        if (!next[item.id]) {
+          next[item.id] = toRoleOption(item.role);
+        }
+      });
+
+      return next;
+    });
+
+    setPendingLevelByUserId((previous) => {
+      const next = { ...previous };
+      users.forEach((item) => {
+        if (!(item.id in next)) {
+          next[item.id] = toLevelOption(item.levelType);
+        }
+      });
+
+      return next;
+    });
+  }, [users]);
 
   const userStats = useMemo(() => {
     return {
       totalUsers: users.length,
-      citizens: users.filter((item) => getSafeStatus(item.role) === 'CITIZEN' || getSafeStatus(item.role) === 'ROLE_CITIZEN').length,
-      leaders: users.filter((item) => getSafeStatus(item.role) === 'LEADER' || getSafeStatus(item.role) === 'ROLE_LEADER').length,
-      admins: users.filter((item) => getSafeStatus(item.role) === 'ADMIN' || getSafeStatus(item.role) === 'ROLE_ADMIN').length,
+      citizens: users.filter((item) => toRoleOption(item.role) === 'CITIZEN').length,
+      leaders: users.filter((item) => toRoleOption(item.role) === 'LEADER').length,
+      admins: users.filter((item) => toRoleOption(item.role) === 'ADMIN').length,
     };
   }, [users]);
 
@@ -246,11 +299,8 @@ const AdminDashboard = () => {
         item.fullName ?? '',
         item.email,
         item.nationalId ?? '',
-        item.fullAddress ?? '',
-        item.districtName ?? '',
-        item.sectorName ?? '',
-        item.cellName ?? '',
-        item.villageName ?? '',
+        item.locationName ?? '',
+        item.fullRwandanAddress ?? '',
       ]
         .join(' ')
         .toLowerCase();
@@ -326,15 +376,28 @@ const AdminDashboard = () => {
     setReportSearchQuery(reportSearchInput);
   };
 
-  const handleRoleChange = async (userId: number, newRole: RoleOption) => {
+  const handleRoleChange = async (userId: number) => {
     setRoleUpdatingId(userId);
     setRoleMessage('');
 
+    const newRoleValue = pendingRoleByUserId[userId] ?? 'CITIZEN';
+    const selectedLevel = pendingLevelByUserId[userId] ?? '';
+
+    if (newRoleValue === 'LEADER' && !selectedLevel) {
+      setRoleMessage('Please select a leader level before saving.');
+      setRoleUpdatingId(null);
+      return;
+    }
+
     try {
-      await updateUserRole(userId, newRole);
+      await updateUserRole(userId, newRoleValue, newRoleValue === 'LEADER' ? (selectedLevel as LevelOption) : undefined);
       const refreshedUsers = await getAllUsers();
       setUsers(refreshedUsers);
-      setRoleMessage(`Role updated successfully to ${newRole}.`);
+      setRoleMessage(
+        newRoleValue === 'LEADER'
+          ? `Role updated to ${newRoleValue} with level ${selectedLevel}.`
+          : `Role updated successfully to ${newRoleValue}.`,
+      );
     } catch {
       setRoleMessage('Failed to update user role. Please try again.');
     } finally {
@@ -532,22 +595,66 @@ const AdminDashboard = () => {
                           <td className="px-5 py-4 text-sm font-medium text-slate-900">{getDisplayName(item)}</td>
                           <td className="px-5 py-4 text-sm text-slate-700">{item.nationalId ?? 'N/A'}</td>
                           <td className="px-5 py-4 text-sm text-slate-700">{getUserAddress(item)}</td>
-                          <td className="px-5 py-4 text-sm text-slate-700">{item.levelType || 'N/A'}</td>
                           <td className="px-5 py-4">
                             <select
-                              value={item.role.startsWith('ROLE_') ? item.role : (`ROLE_${item.role}` as RoleOption)}
+                              value={pendingLevelByUserId[item.id] ?? ''}
                               onChange={(event) => {
-                                void handleRoleChange(item.id, event.target.value as RoleOption);
+                                const nextLevel = event.target.value as LevelOption | '';
+                                setPendingLevelByUserId((previous) => ({
+                                  ...previous,
+                                  [item.id]: nextLevel,
+                                }));
                               }}
-                              disabled={isUpdating}
-                              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+                              disabled={(pendingRoleByUserId[item.id] ?? toRoleOption(item.role)) !== 'LEADER' || isUpdating}
+                              className="min-w-[150px] rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
                             >
-                              {ROLE_OPTIONS.map((option) => (
-                                <option key={option} value={option}>
-                                  {option}
+                              <option value="">Select level</option>
+                              {LEVEL_OPTIONS.map((level) => (
+                                <option key={level} value={level}>
+                                  {level}
                                 </option>
                               ))}
                             </select>
+                          </td>
+                          <td className="px-5 py-4">
+                            <div className="flex items-center gap-2">
+                              <select
+                                value={pendingRoleByUserId[item.id] ?? toRoleOption(item.role)}
+                                onChange={(event) => {
+                                  const nextRole = event.target.value as RoleOption;
+                                  setPendingRoleByUserId((previous) => ({
+                                    ...previous,
+                                    [item.id]: nextRole,
+                                  }));
+
+                                  if (nextRole !== 'LEADER') {
+                                    setPendingLevelByUserId((previous) => ({
+                                      ...previous,
+                                      [item.id]: '',
+                                    }));
+                                  }
+                                }}
+                                disabled={isUpdating}
+                                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {ROLE_OPTIONS.map((option) => (
+                                  <option key={option} value={option}>
+                                    {option}
+                                  </option>
+                                ))}
+                              </select>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  void handleRoleChange(item.id);
+                                }}
+                                disabled={isUpdating}
+                                className="rounded-md bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                Save
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );

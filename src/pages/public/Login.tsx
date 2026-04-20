@@ -2,10 +2,10 @@
 import type { FormEvent } from 'react';
 import { AlertCircle, Shield } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import type { AxiosError } from 'axios';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import { useAuth } from '../../contexts/AuthContext';
+import { extractAxiosErrorMessage } from '../../api/responseUtils';
 
 interface LoginLocationState {
   successMessage?: string;
@@ -33,17 +33,19 @@ const Login = () => {
         return;
       }
 
-      if (user.role === 'LEADER' || user.role === 'ADMIN') {
+      if (user.role === 'LEADER') {
         navigate('/leader/dashboard', { replace: true });
+        return;
+      }
+
+      if (user.role === 'ADMIN') {
+        navigate('/admin/dashboard', { replace: true });
         return;
       }
 
       navigate('/dashboard', { replace: true });
     } catch (caughtError) {
-      const axiosError = caughtError as AxiosError<{ message?: string }>;
-      const status = axiosError.response?.status;
-      const message = axiosError.response?.data?.message ?? 'Login failed. Please verify your credentials.';
-      setError(status ? `${message} (HTTP ${status})` : message);
+      setError(extractAxiosErrorMessage(caughtError, 'Login failed. Please verify your credentials.'));
     }
   };
 

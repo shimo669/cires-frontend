@@ -18,6 +18,10 @@ interface StoredUser {
   role: User['role'];
   email: string;
   nationalId: string;
+  locationId?: number | null;
+  locationName?: string | null;
+  fullRwandanAddress?: string | null;
+  levelType?: string;
 }
 
 const TOKEN_KEY = 'jwt_token';
@@ -39,6 +43,10 @@ const getStoredUser = (): User | null => {
       role: parsed.role,
       email: parsed.email,
       nationalId: parsed.nationalId,
+      locationId: parsed.locationId,
+      locationName: parsed.locationName,
+      fullRwandanAddress: parsed.fullRwandanAddress,
+      levelType: parsed.levelType,
     };
   } catch {
     localStorage.removeItem(USER_KEY);
@@ -57,11 +65,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const response = await authApi.login(credentials);
 
+      if (!response.token) {
+        throw new Error('Login response does not include a token.');
+      }
+
       const nextUser: User = {
         username: response.username,
         role: response.role,
-        email: user?.email ?? '',
-        nationalId: user?.nationalId ?? '',
+        email: response.email,
+        nationalId: response.nationalId,
+        locationId: response.locationId,
+        locationName: response.locationName,
+        fullRwandanAddress: response.fullRwandanAddress,
+        levelType: response.levelType ?? user?.levelType,
       };
 
       localStorage.setItem(TOKEN_KEY, response.token);

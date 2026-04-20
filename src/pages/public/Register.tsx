@@ -2,12 +2,11 @@
 import type { ChangeEvent, FormEvent } from 'react';
 import { AlertCircle, CheckCircle2, UserPlus } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import type { AxiosError } from 'axios';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import GeographyDropdowns from '../../components/form/GeographyDropdowns';
 import { useAuth } from '../../contexts/AuthContext';
-import type { AddressHierarchySelection } from '../../types/geo';
+import { extractAxiosErrorMessage } from '../../api/responseUtils';
 
 const Register = () => {
   const navigate = useNavigate();
@@ -20,13 +19,7 @@ const Register = () => {
     password: '',
     confirmPassword: '',
   });
-  const [addressSelection, setAddressSelection] = useState<AddressHierarchySelection>({
-    provinceId: null,
-    districtId: null,
-    sectorId: null,
-    cellId: null,
-    villageId: null,
-  });
+  const [selectedVillageId, setSelectedVillageId] = useState<number | null>(null);
   const [locationResetKey, setLocationResetKey] = useState(0);
   const [error, setError] = useState('');
 
@@ -44,8 +37,6 @@ const Register = () => {
     event.preventDefault();
     setError('');
 
-    const hasCompleteAddress = Object.values(addressSelection).every((value) => value !== null);
-
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match.');
       return;
@@ -56,8 +47,8 @@ const Register = () => {
       return;
     }
 
-    if (!hasCompleteAddress) {
-      setError('Please select your full residential address down to village level.');
+    if (!selectedVillageId) {
+      setError('Please select your village so registration can save your location.');
       return;
     }
 
@@ -67,14 +58,11 @@ const Register = () => {
         email: formData.email,
         nationalId: formData.nationalId,
         password: formData.password,
-        provinceId: addressSelection.provinceId as number,
-        districtId: addressSelection.districtId as number,
-        sectorId: addressSelection.sectorId as number,
-        cellId: addressSelection.cellId as number,
-        villageId: addressSelection.villageId as number,
+        locationId: selectedVillageId,
       });
 
       setLocationResetKey((prev) => prev + 1);
+      setSelectedVillageId(null);
 
       navigate('/login', {
         replace: true,
@@ -83,10 +71,7 @@ const Register = () => {
         },
       });
     } catch (caughtError) {
-      const axiosError = caughtError as AxiosError<{ message?: string }>;
-      const status = axiosError.response?.status;
-      const message = axiosError.response?.data?.message ?? 'Registration failed. Please try again.';
-      setError(status ? `${message} (HTTP ${status})` : message);
+      setError(extractAxiosErrorMessage(caughtError, 'Registration failed. Please try again.'));
     }
   };
 
@@ -112,7 +97,7 @@ const Register = () => {
           <div className="flex items-start gap-2">
             <CheckCircle2 className="mt-0.5 h-4 w-4" />
             <p>
-              Registration now captures your residential province, district, sector, cell, and village so the backend can store the related location IDs.
+              Select your full address down to village level so your account is linked to a valid location.
             </p>
           </div>
         </div>
@@ -163,8 +148,8 @@ const Register = () => {
 
             <GeographyDropdowns
               key={locationResetKey}
-              onSelectionChange={(selection) => {
-                setAddressSelection(selection);
+              onVillageSelected={(villageId) => {
+                setSelectedVillageId(villageId);
               }}
             />
           </div>

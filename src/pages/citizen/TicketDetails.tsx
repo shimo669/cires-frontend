@@ -8,6 +8,7 @@ import type { HistoryResponseDTO } from '../../types/interaction';
 
 interface LocationState {
   reportStatus?: string;
+  deadlineDate?: string;
 }
 
 const formatDateTime = (timestamp: string) => {
@@ -18,6 +19,28 @@ const formatDateTime = (timestamp: string) => {
   }
 
   return date.toLocaleString();
+};
+
+const getCountdown = (deadline?: string) => {
+  if (!deadline) {
+    return { label: 'N/A', overdue: false };
+  }
+
+  const deadlineMs = new Date(deadline).getTime();
+  if (Number.isNaN(deadlineMs)) {
+    return { label: 'N/A', overdue: false };
+  }
+
+  const diff = deadlineMs - Date.now();
+  const abs = Math.abs(diff);
+  const hours = Math.floor(abs / (1000 * 60 * 60));
+  const minutes = Math.floor((abs % (1000 * 60 * 60)) / (1000 * 60));
+
+  if (diff < 0) {
+    return { label: `OVERDUE by ${hours}h ${minutes}m`, overdue: true };
+  }
+
+  return { label: `${hours}h ${minutes}m remaining`, overdue: false };
 };
 
 const TicketDetails = () => {
@@ -35,6 +58,17 @@ const TicketDetails = () => {
   const [comment, setComment] = useState('');
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
   const [feedbackSuccess, setFeedbackSuccess] = useState('');
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setNow(Date.now());
+    }, 1000 * 30);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, []);
 
   useEffect(() => {
     if (!Number.isFinite(numericReportId)) {
@@ -82,6 +116,11 @@ const TicketDetails = () => {
     return history.some((item) => item.action.toUpperCase().includes('RESOLVED'));
   }, [history, state?.reportStatus]);
 
+  const countdown = useMemo(() => {
+    void now;
+    return getCountdown(state?.deadlineDate);
+  }, [now, state?.deadlineDate]);
+
   const handleFeedbackSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -114,6 +153,19 @@ const TicketDetails = () => {
           <div className="mx-auto max-w-4xl">
             <h1 className="text-2xl font-bold text-slate-900">Ticket Timeline</h1>
             <p className="mt-1 text-slate-500">Tracking history for Report #{reportId ?? 'N/A'}.</p>
+
+            {state?.reportStatus && (
+              <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+                  <p className="text-xs uppercase tracking-wider text-slate-500">Current Status</p>
+                  <p className="mt-1 font-semibold text-slate-900">{state.reportStatus.replace(/_/g, ' ')}</p>
+                </div>
+                <div className={`rounded-lg border px-4 py-3 text-sm ${countdown.overdue ? 'border-red-200 bg-red-50 text-red-700' : 'border-blue-200 bg-blue-50 text-blue-700'}`}>
+                  <p className="text-xs uppercase tracking-wider">SLA Countdown</p>
+                  <p className="mt-1 font-semibold">{countdown.label}</p>
+                </div>
+              </div>
+            )}
 
             {error && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
 

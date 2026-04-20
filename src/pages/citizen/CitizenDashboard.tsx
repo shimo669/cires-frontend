@@ -2,7 +2,7 @@
 import { PlusCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { Report as ReportDTO } from '../../types/report';
-import { getMyReports } from '../../api/reportApi';
+import { confirmReport, denyReport, getMyReports } from '../../api/reportApi';
 import Badge from '../../components/common/Badge';
 import Button from '../../components/common/Button';
 import Navbar from '../../components/layout/Navbar';
@@ -33,41 +33,56 @@ const CitizenDashboard = () => {
   const [reports, setReports] = useState<ReportDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
+  const [success, setSuccess] = useState('');
+
+  const loadReports = async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const data = await getMyReports();
+      setReports(data);
+    } catch {
+      setError('Failed to load your reports. Please try again.');
+      setReports([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    let isMounted = true;
-
-    const loadReports = async () => {
-      setLoading(true);
-      setError('');
-
-      try {
-        const data = await getMyReports();
-
-        if (isMounted) {
-          setReports(data);
-        }
-      } catch {
-        if (isMounted) {
-          setError('Failed to load your reports. Please try again.');
-          setReports([]);
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    };
-
     void loadReports();
-
-    return () => {
-      isMounted = false;
-    };
   }, []);
 
   const totalReports = reports.length;
   const resolvedReports = useMemo(() => reports.filter((report) => report.status === 'RESOLVED').length, [reports]);
+  const pendingConfirmationCount = useMemo(
+    () => reports.filter((report) => report.status === 'PENDING_CONFIRMATION').length,
+    [reports],
+  );
+
+  const handleCitizenDecision = async (reportId: number, decision: 'confirm' | 'deny') => {
+    setActionLoadingId(reportId);
+    setError('');
+    setSuccess('');
+
+    try {
+      if (decision === 'confirm') {
+        await confirmReport(reportId);
+        setSuccess('Thank you. The issue has been confirmed as resolved.');
+      } else {
+        await denyReport(reportId);
+        setSuccess('Issue has been reopened and sent back for action.');
+      }
+
+      await loadReports();
+    } catch {
+      setError('Action failed. Please try again.');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -93,6 +108,14 @@ const CitizenDashboard = () => {
               New Report
             </Button>
           </div>
+
+          {pendingConfirmationCount > 0 && (
+            <div className="mb-6 rounded-lg border border-purple-200 bg-purple-50 px-4 py-3 text-sm text-purple-700">
+              You have {pendingConfirmationCount} issue(s) waiting for your confirmation.
+            </div>
+          )}
+
+          {success && <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</div>}
 
           <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -121,20 +144,66 @@ const CitizenDashboard = () => {
                     <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Location</th>
                     <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">SLA Deadline</th>
                     <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Status</th>
+                    <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {reports.map((report) => (
-                    <tr key={report.report_id} className="hover:bg-slate-50">
-                      <td className="px-5 py-4 font-medium text-slate-800">{report.title}</td>
-                      <td className="px-5 py-4 text-slate-600">{getCategory(report)}</td>
-                      <td className="px-5 py-4 text-slate-600">{getLocation(report)}</td>
-                      <td className="px-5 py-4 text-slate-600">{formatDate(report.sla_deadline)}</td>
-                      <td className="px-5 py-4">
-                        <Badge status={report.status} />
-                      </td>
-                    </tr>
-                  ))}
+                  {reports.map((report) => {
+                    const isPendingConfirmation = report.status === 'PENDING_CONFIRMATION';
+                    const rowLoading = actionLoadingId === report.report_id;
+
+                    return (
+                      <tr key={report.report_id} className="hover:bg-slate-50">
+                        <td className="px-5 py-4 font-medium text-slate-800">{report.title}</td>
+                        <td className="px-5 py-4 text-slate-600">{getCategory(report)}</td>
+                        <td className="px-5 py-4 text-slate-600">{getLocation(report)}</td>
+                        <td className="px-5 py-4 text-slate-600">{formatDate(report.sla_deadline)}</td>
+                        <td className="px-5 py-4">
+                          <Badge status={report.status} />
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {isPendingConfirmation && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    void handleCitizenDecision(report.report_id, 'confirm');
+                                  }}
+                                  disabled={rowLoading}
+                                  className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                                >
+                                  Confirm Resolved
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    void handleCitizenDecision(report.report_id, 'deny');
+                                  }}
+                                  disabled={rowLoading}
+                                  className="rounded-md bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+                                >
+                                  Deny / Reopen
+                                </button>
+                              </>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                navigate(`/reports/${report.report_id}`, {
+                                  state: { reportStatus: report.status, deadlineDate: report.sla_deadline },
+                                })
+                              }
+                              className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                            >
+                              Details
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )}

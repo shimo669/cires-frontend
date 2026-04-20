@@ -3,6 +3,7 @@ import Login from '../pages/public/Login';
 import Register from '../pages/public/Register';
 import DashboardHub from '../pages/DashboardHub'; // Import the new file
 import SubmitReport from '../pages/citizen/SubmitReport';
+import TicketDetails from '../pages/citizen/TicketDetails';
 import ProtectedRoute from './ProtectedRoute'; // Import the ProtectedRoute component
 import EscalationQueue from '../pages/leader/EscalationQueue'; // Import Leader specific page
 import SLAConfig from '../pages/admin/SLAConfig'; // Import Admin specific page
@@ -18,6 +19,7 @@ const AppRoutes = () => {
             <Route path="/dashboard" element={<DashboardHub />} />
 
             <Route path="/report/new" element={<ProtectedRoute roles={['CITIZEN']}><SubmitReport /></ProtectedRoute>} />
+            <Route path="/reports/:reportId" element={<ProtectedRoute roles={['CITIZEN']}><TicketDetails /></ProtectedRoute>} />
 
             {/* Leader specific routes */}
             <Route path="/escalations" element={<ProtectedRoute roles={['LEADER']}><EscalationQueue /></ProtectedRoute>} />
@@ -29,6 +31,7 @@ const AppRoutes = () => {
             {/* Backward-compatible aliases for role-based login redirects */}
             <Route path="/citizen/dashboard" element={<Navigate to="/dashboard" replace />} />
             <Route path="/leader/dashboard" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/admin/dashboard" element={<Navigate to="/dashboard" replace />} />
             <Route path="/reports" element={<Navigate to="/dashboard" replace />} />
 
             <Route path="/" element={<Navigate to="/login" />} />

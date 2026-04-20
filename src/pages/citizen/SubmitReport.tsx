@@ -7,7 +7,6 @@ import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import GeographyDropdowns from '../../components/form/GeographyDropdowns';
 import { createReport } from '../../api/reportApi';
-import type { AddressHierarchySelection } from '../../types/geo';
 
 const CATEGORIES = [
   { id: 1, name: 'Water' },
@@ -22,16 +21,7 @@ const SubmitReport = () => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [categoryId, setCategoryId] = useState<number>(1);
-  const [categoryName, setCategoryName] = useState<string>('Water');
-  const [incidentLocationId, setIncidentLocationId] = useState<number | null>(null);
-  const [locationName, setLocationName] = useState<string>('');
-  const [incidentAddress, setIncidentAddress] = useState<AddressHierarchySelection>({
-    provinceId: null,
-    districtId: null,
-    sectorId: null,
-    cellId: null,
-    villageId: null,
-  });
+  const [incidentVillageId, setIncidentVillageId] = useState<number | null>(null);
   const [locationResetKey, setLocationResetKey] = useState(0);
 
   const [loading, setLoading] = useState(false);
@@ -43,14 +33,10 @@ const SubmitReport = () => {
     setError('');
     setSuccess('');
 
-    const hasCompleteAddress = Object.values(incidentAddress).every((value) => value !== null);
-
-    if (!incidentLocationId || !hasCompleteAddress) {
-      setError('Please select the full incident location up to village level.');
+    if (!incidentVillageId) {
+      setError('Please select the incident village.');
       return;
     }
-
-    const slaDeadline = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
 
     setLoading(true);
 
@@ -59,31 +45,14 @@ const SubmitReport = () => {
         title,
         description,
         categoryId,
-        categoryName,
-        incidentLocationId,
-        incidentLocationName: locationName,
-        provinceId: incidentAddress.provinceId as number,
-        districtId: incidentAddress.districtId as number,
-        sectorId: incidentAddress.sectorId as number,
-        cellId: incidentAddress.cellId as number,
-        villageId: incidentAddress.villageId as number,
-        slaDeadline,
+        villageId: incidentVillageId,
       });
 
       setSuccess('Report created successfully. Your issue has been submitted for review.');
       setTitle('');
       setDescription('');
       setCategoryId(1);
-      setCategoryName('Water');
-      setIncidentLocationId(null);
-      setLocationName('');
-      setIncidentAddress({
-        provinceId: null,
-        districtId: null,
-        sectorId: null,
-        cellId: null,
-        villageId: null,
-      });
+      setIncidentVillageId(null);
       setLocationResetKey((prev) => prev + 1);
     } catch {
       setError('Failed to create report. Please try again in a moment.');
@@ -136,12 +105,7 @@ const SubmitReport = () => {
                     className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 outline-none transition focus:border-slate-900"
                     value={categoryId}
                     onChange={(event) => {
-                      const id = Number(event.target.value);
-                      setCategoryId(id);
-                      const selected = CATEGORIES.find((c) => c.id === id);
-                      if (selected) {
-                        setCategoryName(selected.name);
-                      }
+                      setCategoryId(Number(event.target.value));
                     }}
                   >
                     {CATEGORIES.map((category) => (
@@ -169,23 +133,8 @@ const SubmitReport = () => {
                 <h3 className="mb-4 text-sm font-black uppercase tracking-widest text-slate-400">Incident Location</h3>
                 <GeographyDropdowns
                   key={locationResetKey}
-                  onSelectionChange={(selection) => {
-                    setIncidentAddress(selection);
-                  }}
-                  onSelectionChangeWithNames={(selectionWithNames) => {
-                    if (selectionWithNames.villageName) {
-                      const locationParts = [
-                        selectionWithNames.provinceName,
-                        selectionWithNames.districtName,
-                        selectionWithNames.sectorName,
-                        selectionWithNames.cellName,
-                        selectionWithNames.villageName,
-                      ].filter(Boolean);
-                      setLocationName(locationParts.join(', '));
-                    }
-                  }}
                   onVillageSelected={(villageId) => {
-                    setIncidentLocationId(villageId);
+                    setIncidentVillageId(villageId);
                   }}
                 />
               </div>

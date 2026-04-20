@@ -1,5 +1,3 @@
-import type { AddressHierarchyRequest } from './geo';
-
 export type UserRole = 'CITIZEN' | 'LEADER' | 'ADMIN';
 
 export interface LoginRequest {
@@ -7,17 +5,24 @@ export interface LoginRequest {
   password: string;
 }
 
-export interface RegisterRequest extends AddressHierarchyRequest {
+export interface RegisterRequest {
   username: string;
   email: string;
   password: string;
   nationalId: string;
+  locationId?: number;
 }
 
 export interface AuthResponse {
-  token: string;
+  token?: string;
   username: string;
+  email: string;
+  nationalId: string;
   role: UserRole;
+  locationId?: number | null;
+  locationName?: string | null;
+  fullRwandanAddress?: string | null;
+  levelType?: string;
 }
 
 export interface User {
@@ -25,9 +30,9 @@ export interface User {
   email: string;
   nationalId: string;
   role: UserRole;
-  provinceId?: number;
-  districtId?: number;
-  sectorId?: number;
-  cellId?: number;
-  villageId?: number;
+  locationId?: number | null;
+  locationName?: string | null;
+  fullRwandanAddress?: string | null;
+  levelType?: string;
 }
+

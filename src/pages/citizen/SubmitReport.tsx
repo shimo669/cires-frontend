@@ -7,6 +7,7 @@ import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import GeographyDropdowns from '../../components/form/GeographyDropdowns';
 import { createReport } from '../../api/reportApi';
+import type { AddressHierarchySelectionWithNames } from '../../types/geo';
 
 const CATEGORIES = [
   { id: 1, name: 'Water' },
@@ -21,7 +22,9 @@ const SubmitReport = () => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [categoryId, setCategoryId] = useState<number>(1);
+  const [categoryName, setCategoryName] = useState(CATEGORIES[0].name);
   const [incidentVillageId, setIncidentVillageId] = useState<number | null>(null);
+  const [locationSelection, setLocationSelection] = useState<AddressHierarchySelectionWithNames | null>(null);
   const [locationResetKey, setLocationResetKey] = useState(0);
 
   const [loading, setLoading] = useState(false);
@@ -41,18 +44,39 @@ const SubmitReport = () => {
     setLoading(true);
 
     try {
-      await createReport({
+      const locationName = [
+        locationSelection?.provinceName,
+        locationSelection?.districtName,
+        locationSelection?.sectorName,
+        locationSelection?.cellName,
+        locationSelection?.villageName,
+      ]
+        .filter((value): value is string => Boolean(value?.trim()))
+        .join(', ');
+
+      const requestPayload = {
         title,
         description,
         categoryId,
+        categoryName,
+        incidentLocationId: incidentVillageId,
+        incidentLocationName: locationName || undefined,
+        provinceId: locationSelection?.provinceId ?? undefined,
+        districtId: locationSelection?.districtId ?? undefined,
+        sectorId: locationSelection?.sectorId ?? undefined,
+        cellId: locationSelection?.cellId ?? undefined,
         villageId: incidentVillageId,
-      });
+      } as any;
+
+      await createReport(requestPayload);
 
       setSuccess('Report created successfully. Your issue has been submitted for review.');
       setTitle('');
       setDescription('');
       setCategoryId(1);
+      setCategoryName(CATEGORIES[0].name);
       setIncidentVillageId(null);
+      setLocationSelection(null);
       setLocationResetKey((prev) => prev + 1);
     } catch {
       setError('Failed to create report. Please try again in a moment.');
@@ -105,7 +129,10 @@ const SubmitReport = () => {
                     className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 outline-none transition focus:border-slate-900"
                     value={categoryId}
                     onChange={(event) => {
-                      setCategoryId(Number(event.target.value));
+                      const nextCategoryId = Number(event.target.value);
+                      const selectedCategory = CATEGORIES.find((category) => category.id === nextCategoryId);
+                      setCategoryId(nextCategoryId);
+                      setCategoryName(selectedCategory?.name ?? CATEGORIES[0].name);
                     }}
                   >
                     {CATEGORIES.map((category) => (
@@ -135,6 +162,10 @@ const SubmitReport = () => {
                   key={locationResetKey}
                   onVillageSelected={(villageId) => {
                     setIncidentVillageId(villageId);
+                  }}
+                  onSelectionChangeWithNames={(selection) => {
+                    setLocationSelection(selection);
+                    setIncidentVillageId(selection.villageId);
                   }}
                 />
               </div>

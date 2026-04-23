@@ -13,9 +13,22 @@ const normalizeStatus = (status: unknown): ReportDTO['status'] => {
     value === 'PENDING_REPORTER_CONFIRMATION' ||
     value === 'RESOLVED' ||
     value === 'ESCALATED' ||
-    value === 'REOPENED'
+    value === 'REOPENED' ||
+    value === 'NEVER_SOLVED'
   ) {
     return value;
+  }
+
+  if (value === 'SOLVED' || value === 'CONFIRMED' || value === 'CLOSED') {
+    return 'RESOLVED';
+  }
+
+  if (value === 'PENDING_CITIZEN_CONFIRMATION') {
+    return 'PENDING_CONFIRMATION';
+  }
+
+  if (value === 'UNRESOLVED' || value === 'FAILED_PERMANENTLY') {
+    return 'NEVER_SOLVED';
   }
 
   return 'PENDING';
@@ -36,6 +49,9 @@ const normalizeReport = (raw: unknown): ReportDTO => {
     (report.villageName as string | undefined) ??
     (report.incidentLocationName as string | undefined) ??
     'N/A';
+  const escalationLevel = normalizeReportLevel(
+    String(report.current_escalation_level ?? report.currentEscalationLevel ?? report.levelType ?? 'AT_VILLAGE'),
+  );
   const deadline =
     (report.sla_deadline as string | undefined) ??
     (report.deadlineDate as string | undefined) ??
@@ -58,10 +74,12 @@ const normalizeReport = (raw: unknown): ReportDTO => {
     villageId: Number(report.villageId ?? report.village_id ?? report.incidentLocationId ?? 0) || undefined,
     category_name: category,
     incident_village: location,
-    current_escalation_level: String(report.current_escalation_level ?? report.currentEscalationLevel ?? report.levelType ?? 'AT_VILLAGE'),
+    current_escalation_level: escalationLevel,
     sla_deadline: deadline,
     deadline_date: (report.deadline_date as string | undefined) ?? (report.deadlineDate as string | undefined) ?? deadline,
     created_at: createdAt,
+    reporter_id:
+      Number(report.reporter_id ?? report.reporterId ?? report.user_id ?? report.userId ?? 0) || undefined,
     reporter_username: (report.reporter_username as string | undefined) ?? (report.reporterUsername as string | undefined),
     feedback_rating: Number(report.feedback_rating ?? report.feedbackRating ?? 0) || undefined,
     reporterConfirmationRequired,
@@ -92,6 +110,13 @@ export const createReport = async (request: CreateReportRequest) => {
     title: request.title,
     description: request.description,
     categoryId: request.categoryId,
+    ...(request.categoryName ? { categoryName: request.categoryName } : {}),
+    ...(request.incidentLocationId ? { incidentLocationId: request.incidentLocationId } : {}),
+    ...(request.incidentLocationName ? { incidentLocationName: request.incidentLocationName } : {}),
+    ...(request.provinceId ? { provinceId: request.provinceId } : {}),
+    ...(request.districtId ? { districtId: request.districtId } : {}),
+    ...(request.sectorId ? { sectorId: request.sectorId } : {}),
+    ...(request.cellId ? { cellId: request.cellId } : {}),
     villageId: request.villageId,
   };
 
@@ -104,11 +129,6 @@ export const getMyReports = async (): Promise<ReportDTO[]> => {
   return normalizeReportList(response.data);
 };
 
-export const getReportsByLevel = async (level: string): Promise<ReportDTO[]> => {
-  const normalizedLevel = normalizeReportLevel(level);
-  const response = await api.get(`/reports/level/${normalizedLevel}`);
-  return normalizeReportList(response.data);
-};
 
 export const getAdminReports = async (): Promise<ReportDTO[]> => {
   const response = await api.get('/admin/reports');
@@ -116,24 +136,45 @@ export const getAdminReports = async (): Promise<ReportDTO[]> => {
 };
 
 export const getMyJurisdictionReports = async (leaderLevelType?: string): Promise<ReportDTO[]> => {
-  try {
-    const response = await api.get('/leader/reports');
-    return normalizeReportList(response.data);
-  } catch (error) {
-    try {
-      const legacyResponse = await api.get('/reports/leader/my-jurisdiction');
-      return normalizeReportList(legacyResponse.data);
-    } catch {
-      // continue to level fallback below
-    }
+  const normalizedLevel = leaderLevelType ? normalizeReportLevel(leaderLevelType) : '';
+  const attempts: Array<() => Promise<{ data?: unknown }>> = [];
 
-    if (!leaderLevelType) {
-      throw error;
-    }
-
-    const fallback = await getReportsByLevel(leaderLevelType);
-    return fallback;
+  if (normalizedLevel) {
+    attempts.push(() => api.get(`/reports/level/${normalizedLevel}`));
   }
+
+  attempts.push(() => api.get('/leader/reports'));
+  attempts.push(() => api.get('/reports/leader/my-jurisdiction'));
+
+  let lastError: unknown;
+  let emptySuccess: ReportDTO[] | null = null;
+
+  for (const attempt of attempts) {
+    try {
+      const response = await attempt();
+      const data = normalizeReportList(response.data);
+
+      if (data.length > 0) {
+        return data;
+      }
+
+      if (emptySuccess === null) {
+        emptySuccess = data;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (emptySuccess !== null) {
+    return emptySuccess;
+  }
+
+  if (lastError) {
+    throw lastError;
+  }
+
+  return [];
 };
 
 export const resolveReport = async (id: number) => {

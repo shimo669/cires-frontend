@@ -1,4 +1,3 @@
-/// <reference types="vitest" />
 import { describe, expect, it } from 'vitest';
 import { extractApiMessage, extractAxiosErrorMessage, normalizeReportLevel, normalizeRoleName, unwrapApiData } from './responseUtils';
 
@@ -42,6 +41,7 @@ describe('responseUtils', () => {
     expect(normalizeRoleName('unknown')).toBe('CITIZEN');
 
     expect(normalizeReportLevel('VILLAGE')).toBe('AT_VILLAGE');
+    expect(normalizeReportLevel('district_mayor')).toBe('AT_DISTRICT');
     expect(normalizeReportLevel('AT_DISTRICT')).toBe('AT_DISTRICT');
     expect(normalizeReportLevel('national')).toBe('AT_NATIONAL');
   });

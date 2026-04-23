@@ -6,7 +6,8 @@ export type ReportStatus =
   | 'PENDING_REPORTER_CONFIRMATION'
   | 'RESOLVED'
   | 'ESCALATED'
-  | 'REOPENED';
+  | 'REOPENED'
+  | 'NEVER_SOLVED';
 
 export interface ReporterConfirmationRequest {
   approved: boolean;
@@ -18,6 +19,13 @@ export interface CreateReportRequest {
   title: string;
   description: string;
   categoryId: number;
+  categoryName?: string;
+  incidentLocationId?: number;
+  incidentLocationName?: string;
+  provinceId?: number;
+  districtId?: number;
+  sectorId?: number;
+  cellId?: number;
   villageId: number;
 }
 
@@ -35,6 +43,7 @@ export interface Report {
   sla_deadline: string;
   deadline_date?: string;
   created_at: string;
+  reporter_id?: number;
   reporter_username?: string;
   feedback_rating?: number;
   reporterConfirmationRequired?: boolean;

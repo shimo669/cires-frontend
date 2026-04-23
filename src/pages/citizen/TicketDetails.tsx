@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import { useLocation, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import Navbar from '../../components/layout/Navbar';
 import Sidebar from '../../components/layout/Sidebar';
-import { getReportHistory, submitFeedback } from '../../api/interactionApi';
+import { getReportHistory } from '../../api/interactionApi';
+import { confirmReport, getMyReports } from '../../api/reportApi';
+import { extractAxiosErrorMessage } from '../../api/responseUtils';
 import type { HistoryResponseDTO } from '../../types/interaction';
 
 interface LocationState {
@@ -45,6 +47,7 @@ const getCountdown = (deadline?: string) => {
 
 const TicketDetails = () => {
   const { reportId } = useParams<{ reportId: string }>();
+  const navigate = useNavigate();
   const location = useLocation();
   const state = (location.state as LocationState | null) ?? null;
 
@@ -53,11 +56,12 @@ const TicketDetails = () => {
   const [history, setHistory] = useState<HistoryResponseDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [reportStatus, setReportStatus] = useState<string>((state?.reportStatus ?? '').toUpperCase());
 
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState('');
-  const [submittingFeedback, setSubmittingFeedback] = useState(false);
-  const [feedbackSuccess, setFeedbackSuccess] = useState('');
+  const [submittingDecision, setSubmittingDecision] = useState(false);
+  const [decisionSuccess, setDecisionSuccess] = useState('');
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -69,6 +73,37 @@ const TicketDetails = () => {
       window.clearInterval(timer);
     };
   }, []);
+
+  useEffect(() => {
+    if (state?.reportStatus) {
+      setReportStatus(state.reportStatus.toUpperCase());
+      return;
+    }
+
+    if (!Number.isFinite(numericReportId)) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const fetchReportSnapshot = async () => {
+      try {
+        const reports = await getMyReports();
+        const match = reports.find((item) => item.report_id === numericReportId);
+        if (isMounted && match) {
+          setReportStatus(match.status.toUpperCase());
+        }
+      } catch {
+        // fallback to history-based detection below
+      }
+    };
+
+    void fetchReportSnapshot();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [numericReportId, state?.reportStatus]);
 
   useEffect(() => {
     if (!Number.isFinite(numericReportId)) {
@@ -109,37 +144,62 @@ const TicketDetails = () => {
   }, [numericReportId]);
 
   const isResolved = useMemo(() => {
-    if (state?.reportStatus?.toUpperCase() === 'RESOLVED') {
+    if (reportStatus === 'RESOLVED') {
       return true;
     }
 
     return history.some((item) => item.action.toUpperCase().includes('RESOLVED'));
-  }, [history, state?.reportStatus]);
+  }, [history, reportStatus]);
+
+  const isPendingConfirmation = useMemo(() => {
+    return reportStatus === 'PENDING_CONFIRMATION' || reportStatus === 'PENDING_REPORTER_CONFIRMATION';
+  }, [reportStatus]);
 
   const countdown = useMemo(() => {
     void now;
     return getCountdown(state?.deadlineDate);
   }, [now, state?.deadlineDate]);
 
-  const handleFeedbackSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleCitizenDecision = async (event: FormEvent<HTMLFormElement>, approved: boolean) => {
     event.preventDefault();
 
     if (!Number.isFinite(numericReportId)) {
       return;
     }
 
-    setSubmittingFeedback(true);
-    setFeedbackSuccess('');
+    if (approved && (Number.isNaN(rating) || rating < 1 || rating > 5)) {
+      setError('Rating is required and must be between 1 and 5 when approving.');
+      return;
+    }
+
+    setSubmittingDecision(true);
+    setDecisionSuccess('');
+    setError('');
 
     try {
-      const message = await submitFeedback(numericReportId, { rating, comment });
-      setFeedbackSuccess(message);
+      await confirmReport(numericReportId, {
+        approved,
+        ...(approved ? { rating } : {}),
+        ...(comment.trim() ? { comment: comment.trim() } : {}),
+      });
+
+      setReportStatus(approved ? 'RESOLVED' : 'REOPENED');
+      setDecisionSuccess(
+        approved
+          ? 'Issue confirmed as solved. Thank you for rating the service.'
+          : 'Issue rejected and reopened for further leader action.',
+      );
       setComment('');
-      setRating(5);
-    } catch {
-      setError('Failed to submit feedback. Please try again.');
+    } catch (caughtError) {
+      const status = (caughtError as { response?: { status?: number } })?.response?.status;
+      if (status === 401 || status === 403) {
+        navigate('/login', { replace: true });
+        return;
+      }
+
+      setError(extractAxiosErrorMessage(caughtError, 'Failed to submit your decision. Please try again.'));
     } finally {
-      setSubmittingFeedback(false);
+      setSubmittingDecision(false);
     }
   };
 
@@ -189,18 +249,16 @@ const TicketDetails = () => {
               )}
             </section>
 
-            {isResolved && (
+            {decisionSuccess && (
+              <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">{decisionSuccess}</div>
+            )}
+
+            {isPendingConfirmation && (
               <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h2 className="text-lg font-semibold text-slate-800">Submit Feedback</h2>
-                <p className="mt-1 text-sm text-slate-500">Your report is resolved. Please rate the handling experience.</p>
+                <h2 className="text-lg font-semibold text-slate-800">Confirm Resolution</h2>
+                <p className="mt-1 text-sm text-slate-500">Confirm whether this issue is solved, and rate the service when approving.</p>
 
-                {feedbackSuccess && (
-                  <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
-                    {feedbackSuccess}
-                  </div>
-                )}
-
-                <form onSubmit={handleFeedbackSubmit} className="mt-4 space-y-4">
+                <form className="mt-4 space-y-4">
                   <div>
                     <label htmlFor="rating" className="mb-1 block text-sm font-semibold text-slate-700">
                       Rating
@@ -233,14 +291,36 @@ const TicketDetails = () => {
                     />
                   </div>
 
-                  <button
-                    type="submit"
-                    disabled={submittingFeedback}
-                    className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {submittingFeedback ? 'Submitting...' : 'Submit Feedback'}
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        void handleCitizenDecision(event as unknown as FormEvent<HTMLFormElement>, true);
+                      }}
+                      disabled={submittingDecision}
+                      className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {submittingDecision ? 'Submitting...' : 'Approve & Rate'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        void handleCitizenDecision(event as unknown as FormEvent<HTMLFormElement>, false);
+                      }}
+                      disabled={submittingDecision}
+                      className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {submittingDecision ? 'Submitting...' : 'Reject & Reopen'}
+                    </button>
+                  </div>
                 </form>
+              </section>
+            )}
+
+            {isResolved && !isPendingConfirmation && (
+              <section className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
+                <h2 className="text-lg font-semibold text-emerald-800">Issue Solved</h2>
+                <p className="mt-1 text-sm text-emerald-700">This issue is recorded as solved. Thank you for following up.</p>
               </section>
             )}
           </div>

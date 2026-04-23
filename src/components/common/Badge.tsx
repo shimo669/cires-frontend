@@ -14,6 +14,7 @@ const badgeStyles: Record<string, string> = {
   PENDING_REPORTER_CONFIRMATION: 'border-amber-200 bg-amber-50 text-amber-700',
   IN_PROGRESS: 'border-blue-200 bg-blue-50 text-blue-700',
   RESOLVED: 'border-green-200 bg-green-50 text-green-700',
+  NEVER_SOLVED: 'border-red-200 bg-red-50 text-red-800',
   REOPENED: 'border-red-200 bg-red-50 text-red-700',
   SOLVED: 'border-green-200 bg-green-50 text-green-700',
   DEFAULT: 'border-slate-200 bg-slate-100 text-slate-700',
@@ -23,6 +24,8 @@ const badgeLabels: Record<string, string> = {
   IN_PROGRESS: 'IN PROGRESS',
   PENDING_CONFIRMATION: 'PENDING CONFIRMATION',
   PENDING_REPORTER_CONFIRMATION: 'PENDING CONFIRMATION',
+  NEVER_SOLVED: 'NEVER SOLVED',
+  SOLVED: 'RESOLVED',
 };
 
 const Badge: React.FC<BadgeProps> = ({ status }) => {

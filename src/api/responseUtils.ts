@@ -72,33 +72,37 @@ export const normalizeRoleName = (role: unknown): UserRole => {
 export const normalizeReportLevel = (level: string): string => {
   const normalized = level.toUpperCase();
 
+  const aliases: Record<string, string> = {
+    AT_VILLAGE: 'AT_VILLAGE',
+    VILLAGE: 'AT_VILLAGE',
+    VILLAGE_LEADER: 'AT_VILLAGE',
+    AT_CELL: 'AT_CELL',
+    CELL: 'AT_CELL',
+    CELL_LEADER: 'AT_CELL',
+    AT_SECTOR: 'AT_SECTOR',
+    SECTOR: 'AT_SECTOR',
+    SECTOR_LEADER: 'AT_SECTOR',
+    AT_DISTRICT: 'AT_DISTRICT',
+    DISTRICT: 'AT_DISTRICT',
+    DISTRICT_LEADER: 'AT_DISTRICT',
+    DISTRICT_MAYOR: 'AT_DISTRICT',
+    AT_PROVINCE: 'AT_PROVINCE',
+    PROVINCE: 'AT_PROVINCE',
+    PROVINCE_LEADER: 'AT_PROVINCE',
+    PROVINCE_GOVERNOR: 'AT_PROVINCE',
+    AT_NATIONAL: 'AT_NATIONAL',
+    NATIONAL: 'AT_NATIONAL',
+    NATIONAL_ADMIN: 'AT_NATIONAL',
+  };
+
+  if (aliases[normalized]) {
+    return aliases[normalized];
+  }
+
   if (normalized.startsWith('AT_')) {
     return normalized;
   }
 
-  if (normalized === 'VILLAGE') {
-    return 'AT_VILLAGE';
-  }
-
-  if (normalized === 'CELL') {
-    return 'AT_CELL';
-  }
-
-  if (normalized === 'SECTOR') {
-    return 'AT_SECTOR';
-  }
-
-  if (normalized === 'DISTRICT') {
-    return 'AT_DISTRICT';
-  }
-
-  if (normalized === 'PROVINCE') {
-    return 'AT_PROVINCE';
-  }
-
-  if (normalized === 'NATIONAL' || normalized === 'AT_NATIONAL') {
-    return 'AT_NATIONAL';
-  }
 
   return normalized;
 };

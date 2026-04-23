@@ -1,4 +1,3 @@
-/// <reference types="vitest" />
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import api from './axios';
 import { confirmReport, createReport, denyReport, getMyJurisdictionReports } from './reportApi';
@@ -45,29 +44,26 @@ describe('reportApi', () => {
       villageId: 200,
     });
   });
-
-  it('uses /leader/reports as primary endpoint', async () => {
+  it('uses the current level endpoint before legacy leader queues', async () => {
     mockedApi.get.mockResolvedValueOnce({
       data: [{ id: 1, title: 'Issue', status: 'PENDING' }],
     });
 
-    const data = await getMyJurisdictionReports();
+    const data = await getMyJurisdictionReports('AT_VILLAGE');
 
-    expect(mockedApi.get).toHaveBeenCalledWith('/leader/reports');
+    expect(mockedApi.get).toHaveBeenNthCalledWith(1, '/reports/level/AT_VILLAGE');
     expect(data).toHaveLength(1);
   });
 
-  it('falls back to legacy and level endpoint when leader endpoint fails', async () => {
+  it('falls back to leader endpoints when level lookup fails', async () => {
     mockedApi.get
-      .mockRejectedValueOnce(new Error('Primary failed'))
-      .mockRejectedValueOnce(new Error('Legacy failed'))
+      .mockRejectedValueOnce(new Error('Level failed'))
       .mockResolvedValueOnce({ data: [{ id: 4, title: 'Escalated issue', status: 'PENDING' }] });
 
     const data = await getMyJurisdictionReports('VILLAGE');
 
-    expect(mockedApi.get).toHaveBeenNthCalledWith(1, '/leader/reports');
-    expect(mockedApi.get).toHaveBeenNthCalledWith(2, '/reports/leader/my-jurisdiction');
-    expect(mockedApi.get).toHaveBeenNthCalledWith(3, '/reports/level/AT_VILLAGE');
+    expect(mockedApi.get).toHaveBeenNthCalledWith(1, '/reports/level/AT_VILLAGE');
+    expect(mockedApi.get).toHaveBeenNthCalledWith(2, '/leader/reports');
     expect(data).toHaveLength(1);
   });
 

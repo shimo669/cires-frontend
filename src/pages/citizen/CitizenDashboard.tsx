@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PlusCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { Report as ReportDTO } from '../../types/report';
@@ -62,7 +62,7 @@ const CitizenDashboard = () => {
     }));
   };
 
-  const loadReports = async () => {
+  const loadReports = useCallback(async () => {
     setLoading(true);
     setError('');
 
@@ -81,11 +81,11 @@ const CitizenDashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [navigate]);
 
   useEffect(() => {
     void loadReports();
-  }, [navigate]);
+  }, [loadReports]);
 
   const totalReports = reports.length;
   const resolvedReports = useMemo(() => reports.filter((report) => report.status === 'RESOLVED').length, [reports]);
@@ -116,7 +116,11 @@ const CitizenDashboard = () => {
         ...(form.comment.trim() ? { comment: form.comment.trim() } : {}),
       });
 
-      setSuccess(approved ? 'Thank you. The issue has been confirmed as resolved.' : 'Issue has been reopened and sent back for action.');
+      setSuccess(
+        approved
+          ? 'Thank you. The issue has been confirmed as solved and stored in your solved reports.'
+          : 'Issue has been reopened and sent back for further action.',
+      );
 
       await loadReports();
     } catch (caughtError) {
@@ -195,6 +199,7 @@ const CitizenDashboard = () => {
                     <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Title</th>
                     <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Category</th>
                     <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Location</th>
+                    <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Level</th>
                     <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">SLA Deadline</th>
                     <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Status</th>
                     <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Actions</th>
@@ -213,6 +218,7 @@ const CitizenDashboard = () => {
                         <td className="px-5 py-4 font-medium text-slate-800">{report.title}</td>
                         <td className="px-5 py-4 text-slate-600">{getCategory(report)}</td>
                         <td className="px-5 py-4 text-slate-600">{getLocation(report)}</td>
+                        <td className="px-5 py-4 text-slate-600">{report.current_escalation_level.replace(/_/g, ' ')}</td>
                         <td className="px-5 py-4 text-slate-600">{formatDate(report.sla_deadline)}</td>
                         <td className="px-5 py-4">
                           <Badge status={report.status} />

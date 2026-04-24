@@ -1,6 +1,6 @@
 import axios from 'axios';
 import type { AuthResponse, LoginRequest, RegisterRequest } from '../types/auth';
-import api from './axios';
+import api, { API_BASE_URL } from './axios';
 import { normalizeRoleName, unwrapApiData } from './responseUtils';
 
 const toAuthResponse = (payload: unknown): AuthResponse => {
@@ -45,10 +45,15 @@ export const register = async (userData: RegisterRequest): Promise<AuthResponse>
       formPayload.set('locationId', String(userData.locationId));
     }
 
-    const baseURL = typeof api.defaults.baseURL === 'string' ? api.defaults.baseURL : '';
-    const legacyBaseURL = baseURL.endsWith('/api') ? baseURL.slice(0, -4) : '';
+    const fallbackBaseURL = (() => {
+      try {
+        return new URL(API_BASE_URL, window.location.origin).origin;
+      } catch {
+        return typeof api.defaults.baseURL === 'string' ? api.defaults.baseURL : '';
+      }
+    })();
 
-    const fallbackResponse = await axios.post(`${legacyBaseURL}/register/save`, formPayload, {
+    const fallbackResponse = await axios.post(`${fallbackBaseURL}/register/save`, formPayload, {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
